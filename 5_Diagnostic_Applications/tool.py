@@ -92,7 +92,6 @@ def evaluate_uds_response(sid, payload_bytes, response_bytes):
         
     expected_positive_sid = sid + 0x40
     if response_bytes[0] == expected_positive_sid:
-        # Dynamically isolate response structures for varying SID configurations
         if sid in [0x22, 0x2E] and len(payload_bytes) >= 3:
             extracted_data = response_bytes[3:]
         elif sid == 0x14 and len(payload_bytes) >= 4:
@@ -125,27 +124,17 @@ def decode_did_value(sid_val, target_id_int, data_bytes):
     if len(data_bytes) == 0:
         return "Command verification frame acknowledged successfully (No extra data payload)."
 
-    # DYNAMIC MULTI-DTC FORMATTER FOR SID 19 (Bypasses Excel completely)
     if sid_val == 0x19:
         raw_hex = data_bytes.hex().upper()
         if not raw_hex or raw_hex == "00":
             return "Active Diagnostic Trouble Codes (DTCs): None / Empty List"
-        
-        # Standard UDS DTCs are represented as 3 bytes (6 hex characters)
         formatted_dtcs = [raw_hex[i:i+6] for i in range(0, len(raw_hex), 6)]
         return f"Active Diagnostic Trouble Codes (DTCs): {', '.join(formatted_dtcs)}"
 
-    
     try:
-        # 1. Get the directory where this tester script is located (4_ECU_Simulations)
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        
-        # 2. Step UP one level to the main project directory
         parent_dir = os.path.dirname(script_dir)
-        
-        # 3. Create the absolute path straight into the config data directory
         full_path = os.path.join(parent_dir, '2_Configuration_Data', 'decode_values.xlsx')
-        
         wb = openpyxl.load_workbook(full_path, data_only=True)
         sheet = wb.active
     except Exception as e:
@@ -201,7 +190,7 @@ def main():
     global tester_present_active, functional_stack
     
     print("==================================================")
-    print("   STRICT SIDs (10, 22, 3E, 19) DIAGNOSTIC TOOL   ")
+    print("  STRICT SIDs (10, 22, 3E, 19, 14) DIAGNOSTIC TOOL")
     print("   [DIRECT TRANSMIT PORT MAP: 0x{_tx:X} -> 0x{_rx:X}]".format(_tx=TARGET_TX_ID, _rx=TARGET_RX_ID))
     print("==================================================")
     
@@ -230,8 +219,9 @@ def main():
 
         sid = payload_bytes[0]
         
-        if sid not in [0x10, 0x22, 0x3E, 0x19]:
-            print(f"[-] Unsupported Service Identifier: 0x{sid:02X}. Tool is restricted to 0x10, 0x22, 0x3E, and 0x19.")
+        # ALLOWED SIDs: Included 0x14 in the validation checklist
+        if sid not in [0x10, 0x22, 0x3E, 0x19, 0x14]:
+            print(f"[-] Unsupported Service Identifier: 0x{sid:02X}. Tool is restricted to 0x10, 0x22, 0x3E, 0x19, and 0x14.")
             continue
 
         if sid == 0x22 and len(payload_bytes) >= 3:
@@ -279,9 +269,6 @@ def main():
             bus.shutdown()
         except Exception:
             pass
-    if bus:
-        try: bus.shutdown()
-        except: pass
             
     if timeout_occurred:
         print("[+] Termination complete. Exiting process loop.")

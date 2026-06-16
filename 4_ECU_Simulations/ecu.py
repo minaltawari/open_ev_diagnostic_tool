@@ -17,16 +17,9 @@ def setup_can_bus():
 def fetch_mock_ecu_state(sid_val, sub_id_int):
     """Retrieves mock response data payload for matching IDs from ev_state_final.xlsx."""
     try:
-       # 1. Get the directory where your script is saved (4_ECU_Simulations)
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        
-        # 2. Step UP one level to the main project folder
         parent_dir = os.path.dirname(script_dir)
-        
-        # 3. Combine with the correct folder name '2_Configuration_Data' and the file name
         full_path = os.path.join(parent_dir, '2_Configuration_Data', 'ev_state_final.xlsx')
-
-        # 4. Load the workbook using the absolute path
         wb = openpyxl.load_workbook(full_path, data_only=True)
         sheet = wb.active
     except Exception as e:
@@ -76,7 +69,8 @@ def main():
             if request_payload:
                 sid = request_payload[0]
 
-                if sid not in [0x10, 0x22, 0x3E, 0x19]:
+                # ALLOWED SIDs: Included 0x14 in the validation checklist
+                if sid not in [0x10, 0x22, 0x3E, 0x19, 0x14]:
                     print(f"\n[!] Blocked Request Frame with unsupported SID: 0x{sid:02X}")
                     response_bytes = bytearray([0x7F, sid, 0x11])
                     active_stack.send(bytes(response_bytes))
@@ -107,9 +101,13 @@ def main():
                     nrc = int(nrc_input, 16) if nrc_input else 0x22
                     response_bytes.extend([0x7F, sid, nrc])
                 else:
-                    response_bytes.append(sid + 0x40)
+                    response_bytes.append(sid + 0x40) # Positive Response ID generation
+                    
                     if sid == 0x22:
                         response_bytes.extend([request_payload[1], request_payload[2]])
+                    elif sid == 0x14:
+                        # SID 14 echoed response structure doesn't repeat back parameters 
+                        pass 
                     elif len(request_payload) >= 2:
                         response_bytes.append(request_payload[1])
                     
@@ -136,6 +134,10 @@ def main():
                         else:
                             print("[-] No DTCs entered. Transmitting single null data placeholder byte.")
                             response_bytes.extend([0x00])
+
+                    elif sid == 0x14:
+                        print("[+] Executing diagnostic structural clear. Wiping error memory channels...")
+                        # Standard service 14 positive frames return no payload besides service id confirmation (0x54)
 
                     elif sid == 0x22:
                         db_hex_val = fetch_mock_ecu_state(sid, sub_id_int)
