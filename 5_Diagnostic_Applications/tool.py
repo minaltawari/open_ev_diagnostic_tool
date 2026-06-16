@@ -5,7 +5,7 @@ import openpyxl
 import re
 import threading
 import sys
-
+import os
 # ==============================================================================
 # GLOBAL CONFIGURATION & RUNTIME DATA
 # ==============================================================================
@@ -135,11 +135,21 @@ def decode_did_value(sid_val, target_id_int, data_bytes):
         formatted_dtcs = [raw_hex[i:i+6] for i in range(0, len(raw_hex), 6)]
         return f"Active Diagnostic Trouble Codes (DTCs): {', '.join(formatted_dtcs)}"
 
+    
     try:
-        wb = openpyxl.load_workbook('decode_values.xlsx', data_only=True)
+        # 1. Get the directory where this tester script is located (4_ECU_Simulations)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # 2. Step UP one level to the main project directory
+        parent_dir = os.path.dirname(script_dir)
+        
+        # 3. Create the absolute path straight into the config data directory
+        full_path = os.path.join(parent_dir, '2_Configuration_Data', 'decode_values.xlsx')
+        
+        wb = openpyxl.load_workbook(full_path, data_only=True)
         sheet = wb.active
     except Exception as e:
-        return f"Error opening decode_values.xlsx: {e}"
+        return f"Error opening decode_values.xlsx at {full_path if 'full_path' in locals() else 'path'}: {e}"
 
     param_info = None
     for row in sheet.iter_rows(min_row=2, values_only=True):

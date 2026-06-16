@@ -2,6 +2,7 @@ import time
 import can
 import isotp
 import openpyxl
+import os  
 
 ECU_RX_ID = 0x7E0  # ECU listens here (Tester's Tx)
 ECU_TX_ID = 0x7E8  # ECU responds here (Tester's Rx)
@@ -16,7 +17,17 @@ def setup_can_bus():
 def fetch_mock_ecu_state(sid_val, sub_id_int):
     """Retrieves mock response data payload for matching IDs from ev_state_final.xlsx."""
     try:
-        wb = openpyxl.load_workbook('ev_state_final.xlsx', data_only=True)
+       # 1. Get the directory where your script is saved (4_ECU_Simulations)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # 2. Step UP one level to the main project folder
+        parent_dir = os.path.dirname(script_dir)
+        
+        # 3. Combine with the correct folder name '2_Configuration_Data' and the file name
+        full_path = os.path.join(parent_dir, '2_Configuration_Data', 'ev_state_final.xlsx')
+
+        # 4. Load the workbook using the absolute path
+        wb = openpyxl.load_workbook(full_path, data_only=True)
         sheet = wb.active
     except Exception as e:
         print(f"[-] Error loading database matrix (ev_state_final.xlsx): {e}")
