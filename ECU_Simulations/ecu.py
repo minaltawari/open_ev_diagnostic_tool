@@ -19,7 +19,7 @@ def fetch_mock_ecu_state(sid_val, sub_id_int):
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         parent_dir = os.path.dirname(script_dir)
-        full_path = os.path.join(parent_dir, '2_Configuration_Data', 'ev_state_final.xlsx')
+        full_path = os.path.join(parent_dir, 'config', 'ev_state_final.xlsx')
         wb = openpyxl.load_workbook(full_path, data_only=True)
         sheet = wb.active
     except Exception as e:

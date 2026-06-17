@@ -1,0 +1,236 @@
+# ==========================================================
+# MAIN APPLICATION
+# ==========================================================
+import os
+import sys
+
+# Force Python to look at the workspace root directory
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+    
+from core.can_interface import init_hardware_bus
+
+from core.transport_layer import (
+    create_physical_stack,
+    create_functional_stack
+)
+
+from core.diagnostic_engine import DiagnosticEngine
+
+from core.uds_layer import (
+    evaluate_response
+)
+
+from core.translator import Translator
+
+from config.user_config import *
+
+import sys
+
+
+def main():
+
+    print("==================================================")
+    print("  STRICT SIDs (10, 22, 3E, 19, 14) DIAGNOSTIC TOOL")
+    print(
+        f"   [DIRECT TRANSMIT PORT MAP: "
+        f"0x{TARGET_TX_ID:X} -> 0x{TARGET_RX_ID:X}]"
+    )
+    print("==================================================")
+
+    # --------------------------------------------------
+    # CAN INITIALIZATION
+    # --------------------------------------------------
+
+    bus = init_hardware_bus()
+
+    if not bus:
+        print("[-] Failed to initialize CAN Bus.")
+        return
+
+    physical_stack = create_physical_stack(
+        bus,
+        TARGET_TX_ID,
+        TARGET_RX_ID
+    )
+
+    functional_stack = create_functional_stack(
+        bus,
+        TARGET_RX_ID
+    )
+
+    engine = DiagnosticEngine(
+        physical_stack
+    )
+
+    translator = Translator()
+
+    # --------------------------------------------------
+    # MAIN LOOP
+    # --------------------------------------------------
+
+    while True:
+
+        print("\n------------------------------------------------")
+
+        request = input(
+            "Enter Raw UDS Request Command (or 'Q' to quit): "
+        ).strip()
+
+        if request.lower() == "q":
+
+            print(
+                "\n[*] De-allocating interfaces and shutting down CAN bus..."
+            )
+
+            try:
+                bus.shutdown()
+            except:
+                pass
+
+            print("[+] Tool Closed Successfully")
+
+            sys.exit(0)
+
+        if not request:
+            continue
+
+        try:
+
+            payload = bytes.fromhex(
+                request.replace(" ", "")
+            )
+
+        except ValueError:
+
+            print(
+                "[-] Invalid Hex format sequence."
+            )
+
+            continue
+
+        sid = payload[0]
+
+        # ------------------------------------------
+        # SID Validation
+        # ------------------------------------------
+
+        if sid not in SUPPORTED_SIDS:
+
+            print(
+                f"[-] Unsupported Service Identifier: "
+                f"0x{sid:02X}"
+            )
+
+            continue
+
+        # ------------------------------------------
+        # DID Extraction
+        # ------------------------------------------
+
+        if sid == 0x22 and len(payload) >= 3:
+
+            did = (
+                (payload[1] << 8)
+                | payload[2]
+            )
+
+        elif len(payload) >= 2:
+
+            did = payload[1]
+
+        else:
+
+            did = 0x00
+
+        # ------------------------------------------
+        # SEND REQUEST
+        # ------------------------------------------
+
+        print(
+            f"-> Transmitting directly to Target ECU "
+            f"(0x{TARGET_TX_ID:X})..."
+        )
+
+        try:
+
+            engine.send(payload)
+
+        except Exception as e:
+
+            print(
+                f"[-] Transmission Error: {e}"
+            )
+
+            continue
+
+        # ------------------------------------------
+        # WAIT FOR RESPONSE
+        # ------------------------------------------
+
+        print(
+            "<- Dispatched. Awaiting response from ECU terminal..."
+        )
+
+        response = engine.receive(
+            DEFAULT_TIMEOUT
+        )
+
+        # ------------------------------------------
+        # VALIDATE RESPONSE
+        # ------------------------------------------
+
+        positive, message, data = evaluate_response(
+            sid,
+            payload,
+            response
+        )
+
+        print(message)
+
+        # ------------------------------------------
+        # TIMEOUT
+        # ------------------------------------------
+
+        if response is None:
+
+            print(
+                "[!] ECU did not respond within timeout."
+            )
+
+            continue
+
+        # ------------------------------------------
+        # RAW RESPONSE
+        # ------------------------------------------
+
+        print(
+            f"<- Raw Response Received "
+            f"(Hex Stream): "
+            f"{response.hex().upper()}"
+        )
+
+        # ------------------------------------------
+        # HUMAN READABLE DECODE
+        # ------------------------------------------
+
+        if positive:
+
+            decoded_value = translator.decode(
+                sid,
+                did,
+                data
+            )
+
+            print(
+                "\n[DECODED HUMAN-READABLE METRIC]:"
+            )
+
+            print(
+                f">> {decoded_value}"
+            )
+
+
+if __name__ == "__main__":
+    main()
