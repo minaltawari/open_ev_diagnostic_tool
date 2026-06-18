@@ -1,6 +1,9 @@
 # ==========================================================
 # MAIN APPLICATION
 # ==========================================================
+# ==========================================================
+# MAIN APPLICATION
+# ==========================================================
 import os
 import sys
 
@@ -8,7 +11,7 @@ import sys
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
-    
+
 from core.can_interface import init_hardware_bus
 
 from core.transport_layer import (
@@ -23,6 +26,8 @@ from core.uds_layer import (
 )
 
 from core.translator import Translator
+
+from core.tester_present import TesterPresentManager
 
 from config.user_config import *
 
@@ -40,14 +45,19 @@ def main():
     print("==================================================")
 
     # --------------------------------------------------
-    # CAN INITIALIZATION
+    # INITIALIZE CAN BUS
     # --------------------------------------------------
 
     bus = init_hardware_bus()
 
     if not bus:
+
         print("[-] Failed to initialize CAN Bus.")
         return
+
+    # --------------------------------------------------
+    # CREATE ISO-TP STACKS
+    # --------------------------------------------------
 
     physical_stack = create_physical_stack(
         bus,
@@ -60,11 +70,19 @@ def main():
         TARGET_RX_ID
     )
 
+    # --------------------------------------------------
+    # CORE OBJECTS
+    # --------------------------------------------------
+
     engine = DiagnosticEngine(
         physical_stack
     )
 
     translator = Translator()
+
+    tester_present = TesterPresentManager(
+        engine
+    )
 
     # --------------------------------------------------
     # MAIN LOOP
@@ -78,7 +96,13 @@ def main():
             "Enter Raw UDS Request Command (or 'Q' to quit): "
         ).strip()
 
+        # ------------------------------------------
+        # EXIT TOOL
+        # ------------------------------------------
+
         if request.lower() == "q":
+
+            tester_present.stop()
 
             print(
                 "\n[*] De-allocating interfaces and shutting down CAN bus..."
@@ -89,12 +113,18 @@ def main():
             except:
                 pass
 
-            print("[+] Tool Closed Successfully")
+            print(
+                "[+] Tool Closed Successfully"
+            )
 
             sys.exit(0)
 
         if not request:
             continue
+
+        # ------------------------------------------
+        # HEX VALIDATION
+        # ------------------------------------------
 
         try:
 
@@ -113,7 +143,7 @@ def main():
         sid = payload[0]
 
         # ------------------------------------------
-        # SID Validation
+        # SID VALIDATION
         # ------------------------------------------
 
         if sid not in SUPPORTED_SIDS:
@@ -126,26 +156,26 @@ def main():
             continue
 
         # ------------------------------------------
-        # DID Extraction
+        # EXTRACT DID / SUBFUNCTION
         # ------------------------------------------
 
         if sid == 0x22 and len(payload) >= 3:
 
-            did = (
+            target_id = (
                 (payload[1] << 8)
                 | payload[2]
             )
 
         elif len(payload) >= 2:
 
-            did = payload[1]
+            target_id = payload[1]
 
         else:
 
-            did = 0x00
+            target_id = 0x00
 
         # ------------------------------------------
-        # SEND REQUEST
+        # TRANSMIT REQUEST
         # ------------------------------------------
 
         print(
@@ -178,7 +208,7 @@ def main():
         )
 
         # ------------------------------------------
-        # VALIDATE RESPONSE
+        # RESPONSE VALIDATION
         # ------------------------------------------
 
         positive, message, data = evaluate_response(
@@ -190,7 +220,57 @@ def main():
         print(message)
 
         # ------------------------------------------
-        # TIMEOUT
+        # SESSION MANAGEMENT
+        # ------------------------------------------
+
+        if positive and sid == 0x10:
+
+            session_type = payload[1]
+
+            # Programming Session
+
+            if session_type == 0x02:
+
+                tester_present.start()
+
+                print(
+                    "[+] Programming Session Active"
+                )
+
+                print(
+                    "[+] Background Keep-Alive Enabled"
+                )
+
+            # Extended Diagnostic Session
+
+            elif session_type == 0x03:
+
+                tester_present.start()
+
+                print(
+                    "[+] Extended Diagnostic Session Active"
+                )
+
+                print(
+                    "[+] Background Keep-Alive Enabled"
+                )
+
+            # Default Session
+
+            elif session_type == 0x01:
+
+                tester_present.stop()
+
+                print(
+                    "[-] Returning To Default Session"
+                )
+
+                print(
+                    "[-] Tester Present Stopped"
+                )
+
+        # ------------------------------------------
+        # TIMEOUT CHECK
         # ------------------------------------------
 
         if response is None:
@@ -202,7 +282,7 @@ def main():
             continue
 
         # ------------------------------------------
-        # RAW RESPONSE
+        # RAW RESPONSE DISPLAY
         # ------------------------------------------
 
         print(
@@ -219,7 +299,7 @@ def main():
 
             decoded_value = translator.decode(
                 sid,
-                did,
+                target_id,
                 data
             )
 

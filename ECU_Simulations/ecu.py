@@ -6,6 +6,7 @@ import os
 
 ECU_RX_ID = 0x7E0  # ECU listens here (Tester's Tx)
 ECU_TX_ID = 0x7E8  # ECU responds here (Tester's Rx)
+tester_present_seen = False
 
 def setup_can_bus():
     try:
@@ -38,6 +39,7 @@ def fetch_mock_ecu_state(sid_val, sub_id_int):
     return None
 
 def main():
+    global tester_present_seen
     print("==================================================")
     print("    DYNAMIC MULTI-DTC INPUT CHANNELS EMULATOR     ")
     print(f"    Listening: 0x{ECU_RX_ID:X} & 0x7DF [Functional]   ")
@@ -88,7 +90,17 @@ def main():
                     sub_id_int = 0x00
 
                 if sid == 0x3E and sub_id_int == 0x80:
-                    continue
+
+                     if not tester_present_seen:
+
+                        print(
+                        "\n[+] Tester Present Keep-Alive Started"
+                         )
+
+                        tester_present_seen = True
+
+                     continue
+                    
 
                 print(f"\n[!] Intercepted Request Frame: {request_payload.hex().upper()}")
                 response_bytes = bytearray()
