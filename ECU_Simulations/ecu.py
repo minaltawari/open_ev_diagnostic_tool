@@ -2,11 +2,26 @@ import time
 import can
 import isotp
 import openpyxl
-import os  
+import os
+import random
+import threading
 
 ECU_RX_ID = 0x7E0  # ECU listens here (Tester's Tx)
 ECU_TX_ID = 0x7E8  # ECU responds here (Tester's Rx)
 tester_present_seen = False
+
+# Global state variables for the response switch
+response_mode = 'p'  # Default to 'p' (Positive). Can be changed dynamically to 'n'
+common_nrcs = [0x10, 0x11, 0x12, 0x13, 0x22, 0x31, 0x33, 0x7E]  # Common UDS NRC codes to randomize
+
+# Pre-defined DTC Database Menu for selection
+DTC_MENU = {
+    1: {"code": "P0A80", "bytes": bytes.fromhex("0A 80 13"), "desc": "Replace Hybrid/EV Battery Pack"},
+    2: {"code": "P0AA6", "bytes": bytes.fromhex("0A A6 4A"), "desc": "Hybrid Battery Voltage System Isolation Fault"},
+    3: {"code": "P0A1F", "bytes": bytes.fromhex("0A 1F 11"), "desc": "Battery Energy Control Module Performance"},
+    4: {"code": "P0C2F", "bytes": bytes.fromhex("0C 2F 00"), "desc": "Internal Control Module Drive Motor Control Performance"},
+    5: {"code": "U0100", "bytes": bytes.fromhex("C1 00 87"), "desc": "Lost Communication With ECM/PCM"}
+}
 
 def setup_can_bus():
     try:
@@ -38,11 +53,32 @@ def fetch_mock_ecu_state(sid_val, sub_id_int):
         except ValueError: continue
     return None
 
+def monitor_user_input():
+    """Background thread function to listen for mode switch changes without blocking CAN."""
+    global response_mode
+    while True:
+        try:
+            user_input = input().strip().lower()
+            if user_input == 'p':
+                response_mode = 'p'
+                print("\n[SWITCH] Switched to POSITIVE response mode.")
+                print("------------------------------------------------")
+            elif user_input == 'n':
+                response_mode = 'n'
+                print("\n[SWITCH] Switched to NEGATIVE (Fault) response mode with randomized NRCs.")
+                print("------------------------------------------------")
+        except (KeyboardInterrupt, EOFError):
+            break
+
 def main():
-    global tester_present_seen
+    global tester_present_seen, response_mode
     print("==================================================")
     print("    DYNAMIC MULTI-DTC INPUT CHANNELS EMULATOR     ")
     print(f"    Listening: 0x{ECU_RX_ID:X} & 0x7DF [Functional]   ")
+    print("--------------------------------------------------")
+    print("    RUNTIME SWITCH INTERFACE:                     ")
+    print("    Type 'p' + Enter -> Force Positive Responses  ")
+    print("    Type 'n' + Enter -> Force Randomized NRCs     ")
     print("==================================================")
 
     bus = setup_can_bus()
@@ -51,7 +87,11 @@ def main():
     stack_physical = isotp.CanStack(bus=bus, address=isotp.Address(rxid=ECU_RX_ID, txid=ECU_TX_ID), params={'stmin': 10, 'blocksize': 8, 'tx_padding': 0x00})
     stack_functional = isotp.CanStack(bus=bus, address=isotp.Address(rxid=0x7DF, txid=ECU_TX_ID), params={'stmin': 10, 'blocksize': 8, 'tx_padding': 0x00})
 
-    print(f"[*] Network sockets linked. Awaiting diagnostic requests...")
+    print(f"[*] Network sockets linked. Awaiting diagnostic requests...\n")
+
+    # Start the non-blocking keyboard input listener thread
+    input_thread = threading.Thread(target=monitor_user_input, daemon=True)
+    input_thread.start()
 
     try:
         while True:
@@ -90,27 +130,19 @@ def main():
                     sub_id_int = 0x00
 
                 if sid == 0x3E and sub_id_int == 0x80:
-
                      if not tester_present_seen:
-
-                        print(
-                        "\n[+] Tester Present Keep-Alive Started"
-                         )
-
+                        print("\n[+] Tester Present Keep-Alive Started")
                         tester_present_seen = True
-
                      continue
-                    
 
                 print(f"\n[!] Intercepted Request Frame: {request_payload.hex().upper()}")
+                print(f"[*] Current Active Mode: {'POSITIVE' if response_mode == 'p' else 'NEGATIVE'}")
                 response_bytes = bytearray()
-
-                print("------------------------------------------------")
-                user_choice = input("Select response behavior -> [P] Positive  [N] Negative (Fault): ").strip().lower()
                 
-                if user_choice == 'n':
-                    nrc_input = input("Enter Hex NRC Fault Code (Default 0x22): ").strip()
-                    nrc = int(nrc_input, 16) if nrc_input else 0x22
+                if response_mode == 'n':
+                    # Automatically pick a randomized negative response code
+                    nrc = random.choice(common_nrcs)
+                    print(f"[-] Simulating Fault. Selected Random NRC: 0x{nrc:02X}")
                     response_bytes.extend([0x7F, sid, nrc])
                 else:
                     response_bytes.append(sid + 0x40) # Positive Response ID generation
@@ -118,38 +150,38 @@ def main():
                     if sid == 0x22:
                         response_bytes.extend([request_payload[1], request_payload[2]])
                     elif sid == 0x14:
-                        # SID 14 echoed response structure doesn't repeat back parameters 
                         pass 
                     elif len(request_payload) >= 2:
                         response_bytes.append(request_payload[1])
                     
                     if sid == 0x19:
-                        print("[*] Enter DTC hex payloads (e.g., 'A9 00 11' or '0A 01 12').")
-                        print("[*] Press Enter on an empty line when you are done adding codes.")
+                        print("\n--- AVAILABLE DTC SELECTION MENU ---")
+                        for idx, info in DTC_MENU.items():
+                            print(f"  [{idx}] {info['code']} -> {info['desc']}")
+                        print("------------------------------------")
+                        print("[*] Choose which DTCs to send back (e.g., enter '1' or '1,3,5').")
+                        print("[*] Leave empty and press Enter to return a clear/empty status byte.")
                         
+                        selection = input("Select Option(s): ").strip()
                         dtc_pool = bytearray()
-                        count = 1
-                        while True:
-                            dtc_item = input(f"  -> Enter DTC #{count} (or leave empty to finish): ").strip()
-                            if not dtc_item:
-                                break
-                            try:
-                                hex_str = dtc_item.replace(" ", "").strip()
-                                if len(hex_str) % 2 != 0: hex_str = "0" + hex_str
-                                dtc_pool.extend(bytes.fromhex(hex_str))
-                                count += 1
-                            except ValueError:
-                                print("  [-] Invalid Hex formatting. Try entering this code again.")
+                        
+                        if selection:
+                            # Split by commas and parse integer selections
+                            choices = [c.strip() for c in selection.split(",")]
+                            for choice in choices:
+                                if choice.isdigit() and int(choice) in DTC_MENU:
+                                    dtc_pool.extend(DTC_MENU[int(choice)]["bytes"])
+                                else:
+                                    print(f"  [!] Selection '{choice}' is invalid and was skipped.")
                         
                         if len(dtc_pool) > 0:
                             response_bytes.extend(dtc_pool)
                         else:
-                            print("[-] No DTCs entered. Transmitting single null data placeholder byte.")
+                            print("[-] No valid DTC choices selected. Returning default null placeholder byte.")
                             response_bytes.extend([0x00])
 
                     elif sid == 0x14:
                         print("[+] Executing diagnostic structural clear. Wiping error memory channels...")
-                        # Standard service 14 positive frames return no payload besides service id confirmation (0x54)
 
                     elif sid == 0x22:
                         db_hex_val = fetch_mock_ecu_state(sid, sub_id_int)
