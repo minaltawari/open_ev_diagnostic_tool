@@ -240,7 +240,8 @@ class DiagnosticsGUI(QMainWindow):
 
         hex_str = " ".join(f"{b:02X}" for b in payload)
         self.log_display.append(f"<b>[TX]</b> Sending: <i>{hex_str}</i>...")
-
+        # Clear input box after sending
+        self.command_input.clear()
         # Disable the send button so the user doesn't spam it
         self.send_btn.setEnabled(False)
 
