@@ -159,7 +159,7 @@ def main():
         # EXTRACT DID / SUBFUNCTION
         # ------------------------------------------
 
-        if sid == 0x22 and len(payload) >= 3:
+        if sid in TWO_BYTE_IDENTIFIER_SIDS and len(payload) >= 3:
 
             target_id = (
                 (payload[1] << 8)
