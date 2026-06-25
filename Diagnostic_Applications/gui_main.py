@@ -97,6 +97,8 @@ class DiagnosticsGUI(QMainWindow):
         self.engine = None
         self.translator = None
         self.tester_present = None
+        self.active_tx_id = TARGET_TX_ID
+        self.active_rx_id = TARGET_RX_ID
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -122,6 +124,47 @@ class DiagnosticsGUI(QMainWindow):
     # HARDWARE / ENGINE INITIALIZATION
     # --------------------------------------------------
     def init_hardware(self):
+        """
+        (Re-)initialize the CAN bus and ISO-TP stacks using whatever
+        TX/RX values are currently in the two input boxes.
+
+        Safe to call multiple times: shuts down the existing bus and
+        stops the keep-alive thread before creating new ones, so there
+        is never more than one live bus on the channel at once.
+        """
+
+        # ------ parse the ID fields first so we fail early on bad input ------
+        try:
+            tx_id = int(self.tx_box.text().strip(), 16)
+            rx_id = int(self.rx_box.text().strip(), 16)
+        except ValueError:
+            self.log_display.append(
+                "❌ Invalid CAN ID — enter plain hex without prefix (e.g. 7E0)."
+            )
+            return
+
+        if tx_id == rx_id:
+            self.log_display.append("❌ TX ID and RX ID must be different.")
+            return
+
+        # ------ tear down whatever is running now ------
+        if self.tester_present:
+            try:
+                self.tester_present.stop()
+            except Exception:
+                pass
+            self.tester_present = None
+
+        if self.bus:
+            try:
+                self.bus.shutdown()
+            except Exception:
+                pass
+            self.bus = None
+
+        self.engine = None
+
+        # ------ bring up fresh bus + stack ------
         self.bus = init_hardware_bus()
 
         if not self.bus:
@@ -129,17 +172,24 @@ class DiagnosticsGUI(QMainWindow):
             self.send_btn.setEnabled(False)
             return
 
-        physical_stack = create_physical_stack(self.bus, TARGET_TX_ID, TARGET_RX_ID)
-        create_functional_stack(self.bus, TARGET_RX_ID)  # reserved for functional addressing
+        physical_stack = create_physical_stack(self.bus, tx_id, rx_id)
+        create_functional_stack(self.bus, rx_id)   # reserved for functional addressing
 
         self.engine = DiagnosticEngine(physical_stack)
         self.translator = Translator()
         self.tester_present = TesterPresentManager(self.engine)
 
+        # Store the active IDs so TX/RX log labels can show them
+        self.active_tx_id = tx_id
+        self.active_rx_id = rx_id
+
+        # log the IDs that are actually in use, not the config-file constants
         self.log_display.append(
-            f"✅ CAN Bus initialized. Target: 0x{TARGET_TX_ID:X} -> 0x{TARGET_RX_ID:X}"
+            f"✅ CAN Bus initialized.  TX: 0x{tx_id:X}  →  RX: 0x{rx_id:X}"
         )
         self.log_display.append("-" * 40)
+
+        self.send_btn.setEnabled(True)
 
     # --------------------------------------------------
     # UI BUILD
@@ -162,7 +212,9 @@ class DiagnosticsGUI(QMainWindow):
         self.left_layout.addWidget(hint_label)
 
         self.send_btn = QPushButton("Send Request")
-        self.send_btn.setStyleSheet("background-color: #0078D7; color: white; font-weight: bold; padding: 5px;")
+        self.send_btn.setStyleSheet(
+            "background-color: #0078D7; color: white; font-weight: bold; padding: 5px;"
+        )
         self.left_layout.addWidget(self.send_btn)
         self.send_btn.clicked.connect(self.send_uds_request)
 
@@ -186,8 +238,28 @@ class DiagnosticsGUI(QMainWindow):
         self.tester_present_label = QLabel("Tester Present: Inactive")
         self.right_layout.addWidget(self.tester_present_label)
 
-        self.right_layout.addWidget(QLabel(f"TX ID: 0x{TARGET_TX_ID:X}"))
-        self.right_layout.addWidget(QLabel(f"RX ID: 0x{TARGET_RX_ID:X}"))
+        # ---- horizontal separator ----
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setFrameShadow(QFrame.Sunken)
+        self.right_layout.addWidget(sep)
+
+        # ---- CAN ID fields ----
+        self.right_layout.addWidget(QLabel("TX ID (Tester → ECU):"))
+        self.tx_box = QLineEdit(f"{TARGET_TX_ID:X}")
+        self.right_layout.addWidget(self.tx_box)
+
+        self.right_layout.addWidget(QLabel("RX ID (ECU → Tester):"))
+        self.rx_box = QLineEdit(f"{TARGET_RX_ID:X}")
+        self.right_layout.addWidget(self.rx_box)
+
+        # ---- Apply button — wires the fields to the actual CAN stack ----
+        self.apply_btn = QPushButton("Apply & Reconnect")
+        self.apply_btn.setStyleSheet(
+            "background-color: #5C2D91; color: white; font-weight: bold; padding: 5px;"
+        )
+        self.apply_btn.clicked.connect(self.init_hardware)
+        self.right_layout.addWidget(self.apply_btn)
 
         self.right_layout.addStretch()
 
@@ -239,7 +311,7 @@ class DiagnosticsGUI(QMainWindow):
             target_id = 0x00
 
         hex_str = " ".join(f"{b:02X}" for b in payload)
-        self.log_display.append(f"<b>[TX]</b> Sending: <i>{hex_str}</i>...")
+        self.log_display.append(f"<b>[TX 0x{self.active_tx_id:X}]</b> Sending: <i>{hex_str}</i>...")
         # Clear input box after sending
         self.command_input.clear()
         # Disable the send button so the user doesn't spam it
@@ -250,6 +322,13 @@ class DiagnosticsGUI(QMainWindow):
         self.worker.result_ready.connect(self.handle_worker_result)
         self.worker.start()
 
+    def format_hex_response(self, data, bytes_per_line=8):
+        lines = []
+        for i in range(0, len(data), bytes_per_line):
+            chunk = data[i:i + bytes_per_line]
+            lines.append(" ".join(f"{b:02X}" for b in chunk))
+        return "\n".join(lines)
+
     def handle_worker_result(self, result):
         """This Slot receives the signal from the Worker when the request finishes."""
         sid = result["sid"]
@@ -259,14 +338,60 @@ class DiagnosticsGUI(QMainWindow):
         response = result["response"]
         decoded = result["decoded"]
 
-        self.log_display.append(f"<b>[RX]</b> {message}")
+        self.log_display.append(f"<b>[RX 0x{self.active_rx_id:X}]</b> {message}")
 
         if response is not None:
+            formatted = self.format_hex_response(response)
             self.log_display.append(
-                f"&lt;- Raw Response (Hex Stream): {response.hex().upper()}"
+                f"&lt;- Raw Response (Hex Stream): {formatted}"
             )
 
-        if decoded is not None:
+        if positive and sid == 0x19 and response is not None:
+            # Drop the first 2 bytes (0x59 confirmation + Subfunction byte)
+            dtc_data = response[2:]
+
+            # Master Lookup Table mirroring your ECU database
+            dtc_lookup = {
+                "0A8013": ("P0A80", "Replace Hybrid/EV Battery Pack"),
+                "0AA64A": ("P0AA6", "Hybrid Battery Voltage System Isolation Fault"),
+                "0A1F11": ("P0A1F", "Battery Energy Control Module Performance"),
+                "0C2F00": ("P0C2F", "Internal Control Module Drive Motor Control Performance"),
+                "C10087": ("U0100", "Lost Communication With ECM/PCM")
+            }
+
+            if len(dtc_data) >= 3:
+                self.log_display.append("<br><b>🔍 [DECODED DIAGNOSTIC TROUBLE CODES]</b>")
+
+                # Split raw data into 3-byte trouble blocks
+                for i in range(0, len(dtc_data) - len(dtc_data) % 3, 3):
+                    dtc_chunk = dtc_data[i:i + 3]
+                    hex_key = dtc_chunk.hex().upper()
+
+                    if hex_key in dtc_lookup:
+                        code, description = dtc_lookup[hex_key]
+                        self.log_display.append(
+                            f"  ⚠️ <font color='red'><b>{code}</b></font> &rarr; "
+                            f"<font color='#0078D7'><b>{description}</b></font>"
+                        )
+                    else:
+                        # Dynamic fallback for unknown codes
+                        prefix_map = {0x00: 'P', 0x01: 'C', 0x02: 'B', 0x03: 'U'}
+                        b1, b2, b3 = dtc_chunk[0], dtc_chunk[1], dtc_chunk[2]
+                        char1 = prefix_map.get((b1 >> 6) & 0x03, '?')
+                        char2 = str((b1 >> 4) & 0x03)
+                        fallback_code = f"{char1}{char2}{(b1 & 0x0F):X}{(b2 >> 4 & 0x0F):X}{(b2 & 0x0F):X}"
+                        self.log_display.append(
+                            f"  ⚠️ <b>{fallback_code}</b> &rarr; Description missing from lookup database "
+                            f"(FTB Subtype: 0x{b3:02X})"
+                        )
+
+            elif len(dtc_data) == 1 and dtc_data[0] == 0x00:
+                self.log_display.append(
+                    "<br><b>✅ [DECODED STATUS]</b> No Active DTCs found in memory modules."
+                )
+
+        # General decode fallback for other SIDs (like 0x22 reading data parameters)
+        elif decoded is not None:
             self.log_display.append(f"<b>[DECODED]</b> {decoded}")
 
         # ------------------------------------------

@@ -285,10 +285,10 @@ def main():
         # RAW RESPONSE DISPLAY
         # ------------------------------------------
 
+        formatted = " ".join(f"{b:02X}" for b in response)
+
         print(
-            f"<- Raw Response Received "
-            f"(Hex Stream): "
-            f"{response.hex().upper()}"
+             f"<- Raw Response Received (Hex Stream): {formatted}"
         )
 
         # ------------------------------------------
