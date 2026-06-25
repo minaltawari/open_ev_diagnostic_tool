@@ -54,7 +54,6 @@ The codebase is organized into distinct, functional workspaces to isolate the do
 * **Key Files:**
   * **`main.py`**: The root application script used to launch core software diagnostics loops.
   * **`gui_main.py`**: A user-friendly graphical interface designed to trigger routines and track live automotive data visually.
-  * `tool.py`: Scripted application modules executing routine operational actions.
 
 ### 6.`Testing_and_Validation/`
 * **Purpose:** Layer-by-layer verification suites designed to validate codebase stability.
