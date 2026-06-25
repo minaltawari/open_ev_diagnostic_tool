@@ -179,8 +179,7 @@ def main():
         # ------------------------------------------
 
         print(
-            f"-> Transmitting directly to Target ECU "
-            f"(0x{TARGET_TX_ID:X})..."
+            f"[TX 0x{TARGET_TX_ID:X}] Transmitting to Target ECU..."
         )
 
         try:
@@ -200,7 +199,7 @@ def main():
         # ------------------------------------------
 
         print(
-            "<- Dispatched. Awaiting response from ECU terminal..."
+            f"[RX 0x{TARGET_RX_ID:X}] Dispatched. Awaiting response from ECU..."
         )
 
         response = engine.receive(
@@ -282,13 +281,18 @@ def main():
             continue
 
         # ------------------------------------------
-        # RAW RESPONSE DISPLAY
+        # RAW RESPONSE DISPLAY  (spaced bytes, wrapped at 8 per line)
         # ------------------------------------------
 
-        formatted = " ".join(f"{b:02X}" for b in response)
+        hex_tokens = [f"{b:02X}" for b in response]
+        lines = [
+            " ".join(hex_tokens[i:i + 8])
+            for i in range(0, len(hex_tokens), 8)
+        ]
+        formatted = "\n   ".join(lines)
 
         print(
-             f"<- Raw Response Received (Hex Stream): {formatted}"
+            f"<- Raw Response Received (Hex Stream):\n   {formatted}"
         )
 
         # ------------------------------------------
