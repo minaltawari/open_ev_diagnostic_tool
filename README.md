@@ -163,7 +163,7 @@ To fully understand how features flow through the code when using the built-in s
 4. **Spin up the Virtual Controller Node:**
 *Open your first terminal window and run:
 ```bash
-   python ECU_Simulations/ecu.py
+   python ECU_Simulations/gui_ecu.py
 ```
 <br>
 
