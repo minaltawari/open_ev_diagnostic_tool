@@ -1,7 +1,5 @@
 # Open-Source EV Diagnostic Tool 
 
-Maintainer: Minal Tawari
-            Nandini Tayade  
 
 ## Project Overview
 Welcome to the Open-Source EV Diagnostic Tool!
@@ -128,13 +126,12 @@ To fully understand how features flow through the code when using the built-in s
 
 
 
-## Setting up
+## Setting Up Your Local Environment
 ### Prerequisites
 * Ensure Python 3.13+ is active on your host platform.
 * Git installed on your local machine.
 
 ### Step-by-Step Execution
-
 1. **Clone the project:**
 ```bash
    git clone [https://github.com/minaltawari/open_ev_diagnostic_tool.git](https://github.com/minaltawari/open_ev_diagnostic_tool.git)
