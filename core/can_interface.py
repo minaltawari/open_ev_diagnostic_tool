@@ -1,17 +1,18 @@
 import can
 
 from config.user_config import (
-    MULTICAST_IP,
-    MULTICAST_PORT
+    CAN_INTERFACE,
+    CAN_CHANNEL,
+    BITRATE,
 )
 
 def init_hardware_bus():
 
     try:
         return can.Bus(
-            interface='udp_multicast',
-            channel=MULTICAST_IP,
-            port=MULTICAST_PORT
+            interface=CAN_INTERFACE,
+            channel=CAN_CHANNEL,
+            bitrate=BITRATE
         )
 
     except Exception as e:
