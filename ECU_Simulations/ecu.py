@@ -25,7 +25,7 @@ DTC_MENU = {
 
 def setup_can_bus():
     try:
-        return can.Bus(interface='pcan', channel='PCAN_USBBUS1', bitrate=500000)
+        return can.Bus(interface='pcan', channel='PCAN_USBBUS2', bitrate=500000)
     except Exception as e:
         print(f"[-] Bus initialization failed: {e}")
         return None
