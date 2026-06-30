@@ -6,8 +6,8 @@ import os
 import random
 import threading
 
-ECU_RX_ID = 0x7E0 # ECU listens here (Tester's Tx)
-ECU_TX_ID = 0x7E8 # ECU responds here (Tester's Rx)
+ECU_RX_ID = 0x7E1  # ECU listens here (Tester's Tx)
+ECU_TX_ID = 0x7E9  # ECU responds here (Tester's Rx)
 tester_present_seen = False
 
 # Global state variables for the response switch
