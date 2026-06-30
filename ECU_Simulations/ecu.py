@@ -6,8 +6,8 @@ import os
 import random
 import threading
 
-ECU_RX_ID = 0x7E1  # ECU listens here (Tester's Tx)
-ECU_TX_ID = 0x7E9  # ECU responds here (Tester's Rx)
+ECU_RX_ID = 0x7E0  # ECU listens here (Tester's Tx)
+ECU_TX_ID = 0x7E8  # ECU responds here (Tester's Rx)
 tester_present_seen = False
 
 # Global state variables for the response switch
@@ -25,7 +25,7 @@ DTC_MENU = {
 
 def setup_can_bus():
     try:
-        return can.Bus(interface='udp_multicast', channel='224.0.0.1', port=5001)
+        return can.Bus(interface='pcan', channel='PCAN_USBBUS1', bitrate=500000)
     except Exception as e:
         print(f"[-] Bus initialization failed: {e}")
         return None

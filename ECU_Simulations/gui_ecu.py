@@ -98,7 +98,7 @@ class ECUWorker(QThread):
 
         try:
             while not self._stop_event.is_set():
-                stack_physical.process() 
+                stack_physical.process()
                 stack_functional.process()
 
                 active_stack = None
