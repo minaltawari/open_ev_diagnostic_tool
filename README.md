@@ -7,7 +7,6 @@ Welcome to the Open-Source EV Diagnostic Tool!
 Our main objective is to create a free, accessible, and open-source software tool for diagnosing Electric Vehicles (EVs). Traditionally, the software needed to talk to a car's internal computers (ECUs) is expensive, closed-off, and hard to get. This project changes that by giving everyone the power to diagnose and test EVs using open-source Python code.
 
 Key features of this tool: 
-**Real Vehicle Communication:** It uses standard automotive protocols (like CAN bus and UDS) to communicate directly with EV hardware.
 
 **Live Diagnostics:** It includes easy-to-use applications and interfaces that let you read live vehicle data, check for faults, and monitor the health of the car's systems.
 

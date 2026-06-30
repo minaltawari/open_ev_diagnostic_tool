@@ -254,7 +254,7 @@ class DiagnosticsGUI(QMainWindow):
         self.right_layout.addWidget(self.rx_box)
 
         # ---- Apply button — wires the fields to the actual CAN stack ----
-        self.apply_btn = QPushButton("Apply & Reconnect")
+        self.apply_btn = QPushButton("Connect")
         self.apply_btn.setStyleSheet(
             "background-color: #5C2D91; color: white; font-weight: bold; padding: 5px;"
         )
@@ -352,11 +352,11 @@ class DiagnosticsGUI(QMainWindow):
 
             # Master Lookup Table mirroring your ECU database
             dtc_lookup = {
-                "0A8013": ("P0A80", "Replace Hybrid/EV Battery Pack"),
-                "0AA64A": ("P0AA6", "Hybrid Battery Voltage System Isolation Fault"),
-                "0A1F11": ("P0A1F", "Battery Energy Control Module Performance"),
-                "0C2F00": ("P0C2F", "Internal Control Module Drive Motor Control Performance"),
-                "C10087": ("U0100", "Lost Communication With ECM/PCM")
+                "0A8013": ("0x0A 80 13", "Replace Hybrid/EV Battery Pack"),
+                "0AA64A": ("0x0A A6 4A", "Hybrid Battery Voltage System Isolation Fault"),
+                "0A1F11": ("0x0A 1F 11", "Battery Energy Control Module Performance"),
+                "0C2F00": ("0x0C 2F 00", "Internal Control Module Drive Motor Control Performance"),
+                "C10087": ("0xC1 00 87", "Lost Communication With ECM/PCM")
             }
 
             if len(dtc_data) >= 3:
