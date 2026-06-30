@@ -10,9 +10,9 @@ TARGET_RX_ID = 0x7E8
 FUNCTIONAL_ID = 0x7DF
 
 # Network Settings
-
-MULTICAST_IP = "224.0.0.1"
-MULTICAST_PORT = 5001
+CAN_INTERFACE = "udp_multicast"
+CAN_CHANNEL = "224.0.0.1"    #Insert IP address if using virtual CAN / Insert channel name if using physical CAN
+CAN_SETTING = 5001        #Insert port if using virtual CAN / Insert bitrate if using physical CAN
 
 # ISO-TP Parameters
 
