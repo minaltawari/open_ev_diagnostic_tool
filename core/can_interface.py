@@ -10,7 +10,7 @@ def init_hardware_bus():
 
     try:
         return can.Bus(
-            interface=CAN_INTERFACE,
+            interface=PCAN_INTERFACE,
             channel=PCAN_CHANNEL,
             bitrate=BITRATE
         )
