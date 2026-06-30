@@ -1,8 +1,8 @@
 import can
 
 from config.user_config import (
-    CAN_INTERFACE,
-    CAN_CHANNEL,
+    PCAN_INTERFACE,
+    PCAN_CHANNEL,
     BITRATE,
 )
 
@@ -11,7 +11,7 @@ def init_hardware_bus():
     try:
         return can.Bus(
             interface=CAN_INTERFACE,
-            channel=CAN_CHANNEL,
+            channel=PCAN_CHANNEL,
             bitrate=BITRATE
         )
 
