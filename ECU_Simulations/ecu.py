@@ -12,6 +12,7 @@ tester_present_seen = False
 
 # Global state variables for the response switch
 response_mode = 'p'  # Default to 'p' (Positive). Can be changed dynamically to 'n'
+
 common_nrcs = [0x10, 0x11, 0x12, 0x13, 0x22, 0x31, 0x33, 0x7E]  # Common UDS NRC codes to randomize
 
 # Pre-defined DTC Database Menu for selection
